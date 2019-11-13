@@ -13,9 +13,10 @@
 Enrolled: event({ accountAddress: indexed(address)  })
 
 # The DepositMade event should log an accountAddress and an amount (in wei)
-DepositMade: event ({ })
+DepositMade: event({ accountAddress: indexed(address), amount: wei_value })
 
 # Declare an event called 'Withdrawal' that logs an accountAddress, withdrawAmount, and the new balance of the account
+Withdrawal: event({ accountAddress: address, withdrawAmount: wei_value, newBalance: wei_value })
 
 #
 # State variables
@@ -25,7 +26,9 @@ DepositMade: event ({ })
 # - userBalances (a public mapping of address to integer)
 # - enrolled (a public mapping of address to boolean)
 # - owner (a public address)
-
+userBalances: public(map(address, wei_value))
+enrolled: public(map(address, bool))
+owner: public(address)
 #
 # Functions
 # https://vyper.readthedocs.io/en/latest/structure-of-a-contract.html#functions
@@ -34,6 +37,7 @@ DepositMade: event ({ })
 
 @public
 def __init__():
+    self.owner = msg.sender
 
 # @notice Get balance
 # @return The balance of the user
@@ -42,6 +46,7 @@ def __init__():
 @public
 @constant
 def balances() -> wei_value:
+    return self.userBalances[msg.sender]
 
 # @notice Enroll a customer with the bank
 # @return The users enrolled status
@@ -49,6 +54,10 @@ def balances() -> wei_value:
 
 @public
 def enroll() -> bool:
+    self.enrolled[msg.sender] = True
+
+    log.Enrolled(msg.sender)
+    return self.enrolled[msg.sender]
 
 # @notice Deposit ether into bank
 # @return The balance of the user after the deposit is made
@@ -57,7 +66,12 @@ def enroll() -> bool:
 # Emit the appropriate event    
 
 @public
+@payable
 def deposit() -> wei_value:
+    self.userBalances[msg.sender] += msg.value
+
+    log.DepositMade(msg.sender, msg.value)
+    return msg.value
 
 # @notice Withdraw ether from bank
 # @dev This does not return any excess ether sent to it
@@ -67,5 +81,12 @@ def deposit() -> wei_value:
 
 @public
 def withdraw(withdrawAmount: wei_value) -> wei_value:
+    assert withdrawAmount <= self.userBalances[msg.sender]
+
+    self.userBalances[msg.sender] -= withdrawAmount
+    send(msg.sender, withdrawAmount)
+    
+    log.Withdrawal(msg.sender, withdrawAmount, self.userBalances[msg.sender]) 
+    return withdrawAmount
 
 # With no fallback function specified, a fallback is automatically generated that will revert any transaction that it processes. This is not the case in Solidity.
